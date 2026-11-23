@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Админка — PRIDE FC</title>
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0b120e">
+<link rel="stylesheet" href="style.css">
+<style>
+  .wrap { max-width: 1100px; }
+  .nav { display: flex; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
+  .nav button { background: none; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; cursor: pointer; color: var(--muted); }
+  .nav button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+  .nav .badge { background: var(--warn); color: #000; border-radius: 999px; padding: 0 7px; font-size: 12px; margin-left: 4px; font-weight: 800; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin: 14px 0; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .stat div { color: var(--muted); font-size: 12px; }
+  .stat b { font-size: 20px; }
+  .grid-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); }
+  table.sched { border-collapse: collapse; width: 100%; min-width: 520px; }
+  .sched th, .sched td { border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); padding: 0; vertical-align: top; }
+  .sched th { background: var(--panel2); padding: 10px; font-size: 13px; text-align: left; position: sticky; top: 0; }
+  .sched td.h { width: 64px; padding: 10px 8px; color: var(--muted); font-size: 13px; background: var(--panel); border-left: 0; }
+  .cell { width: 100%; height: 100%; min-height: 46px; display: block; border: 0; background: none; text-align: left; padding: 8px 10px; cursor: pointer; color: var(--muted); font-size: 12px; }
+  .cell:hover { background: var(--panel2); }
+  .cell.free::before { content: "+ "; color: var(--accent); font-weight: 700; }
+  .bk { height: 100%; padding: 8px 10px; cursor: pointer; border-left: 4px solid var(--muted); background: var(--panel2); font-size: 13px; }
+  .bk b { display: block; }
+  .bk.paid { border-color: var(--accent); background: #1b2a12; }
+  .bk.unpaid { border-color: #9aa59d; }
+  .bk.hold { border-color: var(--warn); background: #2a2412; }
+  .bk.claimed { border-color: var(--info); background: #12263a; }
+  .bk.prelim { border-color: #8fd14f; background: #1b2a12; border-left-style: dashed; }
+  .cell s { opacity: .6; }
+  .cell i { font-style: normal; color: #ff8a6a; font-weight: 700; }
+  .rc img { max-width: 100%; border-radius: 10px; margin-top: 10px; }
+  .checks { font-size: 13px; } .checks .ok { color: var(--accent); } .checks .bad { color: var(--danger); }
+  .past td { opacity: .55; }
+  .list .item { display: flex; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .list .item:last-child { border-bottom: 0; }
+  .star { background: none; border: 0; font-size: 20px; cursor: pointer; color: #556a5c; }
+  .star.on { color: var(--warn); }
+  table.fields { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.fields th { text-align: left; color: var(--muted); font-weight: 600; padding: 6px 4px; }
+  table.fields td { padding: 4px; }
+  table.fields input { width: 100%; padding: 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: 14px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+  .hrs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .hrs button { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); cursor: pointer; font-size: 13px; }
+  .hrs button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .hrs button:disabled { opacity: .3; cursor: not-allowed; }
+</style>
+</head>
+<body>
+<div id="demo"></div>
+<header class="top"><div class="wrap" style="padding-bottom:0">
+  <div class="brand">
+    <div class="logo">PFC</div>
+    <div class="grow"><h1 id="title">PRIDE FC</h1><p>Админ-панель</p></div>
+    <button class="btn small" id="logout" hidden>Выйти</button>
+  </div>
+  <div class="nav" id="nav" hidden>
+    <button data-v="sched" class="on">Расписание</button>
+    <button data-v="pending">Сверка оплат<span class="badge" id="pc" hidden></span></button>
+    <button data-v="discounts">Скидки</button>
+    <button data-v="clients">Клиенты</button>
+    <button data-v="settings">Настройки</button>
+  </div>
+</div></header>
+<main class="wrap" id="app"><p class="empty">Загрузка…</p></main>
+<div id="modal"></div>
+
+<script type="module">
+import { call, isDemo, saveLocal, loadLocal, dropLocal } from "./api.js";
+import { addDays, weekday, hourLabel, rangeLabel, money, priceInfo, dayKey, slotStart, normPhone } from "./core.js";
+
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const WD = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
+const MON = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
+const dateLong = (d) => `${+d.slice(8)} ${MON[+d.slice(5, 7) - 1]}, ${WD[weekday(d)]}`;
+const STATUS = { hold: "Ждёт оплаты", prelim: "Чек принят — сверить с Kaspi", claimed: "Чек не распознан — проверить вручную", paid: "Предоплата получена", unpaid: "Без предоплаты", cancelled: "Отменена", done: "Завершена" };
+const SRC = { site: "сайт", admin: "админ" };
+
+let pass = loadLocal("pass");
+let cfg, loc = loadLocal("aloc"), view = "sched", date = dayKey(Date.now()), bookings = [], clients = [];
+
+const api = (m, p, o = {}) => call(m, p, { ...o, admin: pass });
+function toast(msg, bad) {
+  const t = document.createElement("div");
+  t.className = "toast" + (bad ? " err" : "");
+  t.textContent = msg; document.body.append(t); setTimeout(() => t.remove(), 3000);
+}
+const closeModal = () => ($("#modal").innerHTML = "");
+function modal(html) {
+  $("#modal").innerHTML = `<div class="modal-bg"><div class="modal">${html}</div></div>`;
+  $(".modal-bg").onclick = (e) => { if (e.target.classList.contains("modal-bg")) closeModal(); };
+}
+const waLink = (p) => "https://wa.me/" + String(p).replace(/\D/g, "");
+const clientOf = (phone) => clients.find((c) => c.phone === phone);
+
+async function start() {
+  if (await isDemo()) $("#demo").innerHTML = '<div class="demo">Демо-режим: данные только в этом браузере. Пароль: demo · <a href="index.html">Страница клиента →</a></div>';
+  if (!pass) return loginView();
+  try { await api("GET", "/admin/check"); } catch { dropLocal("pass"); pass = null; return loginView(); }
+  cfg = await api("GET", "/admin/config");
+  if (!cfg.locations.some((l) => l.id === loc)) loc = cfg.locations[0].id;
+  $("#title").textContent = cfg.name;
+  $("#nav").hidden = false; $("#logout").hidden = false;
+  $("#logout").onclick = () => { dropLocal("pass"); location.reload(); };
+  $$("#nav button").forEach((b) => b.onclick = () => { view = b.dataset.v; $$("#nav button").forEach((x) => x.classList.toggle("on", x === b)); route(); });
+  await loadClients();
+  route();
+  setInterval(() => { if (!$("#modal").innerHTML) refreshPending(); if (view === "sched" && !$("#modal").innerHTML) loadSched(true); }, 20000);
+}
+
+function loginView() {
+  $("#app").innerHTML = `<form class="card" id="lf" style="max-width:360px;margin:40px auto">
+    <h3 style="margin-top:0">Вход для администратора</h3>
+    <label class="f">Пароль<input type="password" name="p" required autofocus></label>
+    <button class="btn main block">Войти</button></form>`;
+  $("#lf").onsubmit = async (e) => {
+    e.preventDefault();
+    pass = new FormData(e.target).get("p");
+    try { await api("GET", "/admin/check"); saveLocal("pass", pass); start(); }
+    catch (err) { toast(err.status === 401 ? "Неверный пароль" : err.message, true); }
+  };
+}
+
+function route() {
+  refreshPending();
+  if (view === "sched") return loadSched();
+  if (view === "pending") return pendingView();
+  if (view === "clients") return clientsView();
+  if (view === "settings") return settingsView();
+  if (view === "discounts") return discountsView();
+}
+
+async function loadClients() { clients = (await api("GET", "/admin/clients")).clients; }
+
+async function refreshPending() {
+  try {
+    const { bookings: p } = await api("GET", "/admin/pending");
+    const n = p.filter((b) => b.status !== "hold").length;
+    $("#pc").hidden = !p.length; $("#pc").textContent = n ? `${n}!` : p.length;
+    return p;
+  } catch { return []; }
+}
+
+// ---------- Расписание ----------
+async function loadSched(silent) {
+  if (!silent) $("#app").innerHTML = '<p class="empty">Загрузка…</p>';
+  bookings = (await api("GET", "/admin/day", { query: { date } })).bookings;
+  schedView();
+}
+
+const locName = (id) => cfg.locations.find((l) => l.id === id)?.name || "";
+function schedView() {
+  const fields = cfg.fields.filter((f) => f.active !== false && f.locationId === loc);
+  const ids = new Set(fields.map((f) => f.id));
+  const act = bookings.filter((b) => b.live && ids.has(b.fieldId));
+  const hoursSold = act.reduce((s, b) => s + b.hours.length, 0);
+  const totalHours = fields.length * (cfg.close - cfg.open);
+  const revenue = act.reduce((s, b) => s + b.total, 0);
+  const prepaid = act.filter((b) => b.status === "paid").reduce((s, b) => s + b.prepay, 0);
+  const onCheck = act.filter((b) => b.status === "prelim").reduce((s, b) => s + b.prepay, 0);
+
+  const at = {}; // fieldId -> hour -> booking
+  for (const b of act) for (const h of b.hours) (at[b.fieldId] ||= {})[h] = b;
+  const skip = {};
+  let rows = "";
+  for (let h = cfg.open; h < cfg.close; h++) {
+    const past = slotStart(date, h + 1) <= Date.now();
+    rows += `<tr class="${past ? "past" : ""}"><td class="h">${hourLabel(h)}</td>`;
+    for (const f of fields) {
+      if (skip[f.id + ":" + h]) continue;
+      const b = at[f.id]?.[h];
+      if (b) {
+        let span = 1;
+        while (at[f.id]?.[h + span] === b) { skip[f.id + ":" + (h + span)] = 1; span++; }
+        const reg = b.regular || clientOf(b.phone)?.regular;
+        rows += `<td rowspan="${span}"><div class="bk ${b.status}" data-id="${b.id}">
+          <b>${reg ? "★ " : ""}${esc(b.name)}</b>
+          <span class="muted">${esc(b.phone || "")}</span><br>
+          <span class="muted">${rangeLabel(b.hours)} · ${money(b.total)}</span><br>
+          <span class="pill ${b.status}" style="margin-top:4px">${STATUS[b.status]}</span>
+        </div></td>`;
+      } else {
+        const pi = priceInfo(cfg, f, date, h);
+        rows += `<td><button class="cell free" data-f="${f.id}" data-h="${h}">${pi.pct ? `<s>${money(pi.base)}</s> ${money(pi.price)} <i>−${pi.pct}%</i>` : money(pi.price)}</button></td>`;
+      }
+    }
+    rows += "</tr>";
+  }
+
+  $("#app").innerHTML = `
+    ${cfg.locations.length > 1 ? `<div class="nav" style="margin-top:18px">${cfg.locations.map((l) => `<button class="${l.id === loc ? "on" : ""}" data-loc="${l.id}">📍 ${esc(l.name)}</button>`).join("")}</div>` : ""}
+    <div class="row wrap" style="margin-top:14px">
+      <button class="btn small" id="prev">‹</button>
+      <input type="date" class="inp" id="dp" value="${date}" style="width:auto;margin:0">
+      <button class="btn small" id="next">›</button>
+      <button class="btn small" id="today">Сегодня</button>
+      <div class="grow"></div>
+      <b>${dateLong(date)}</b>
+    </div>
+    <div class="stats">
+      <div class="stat"><div>Броней</div><b>${act.length}</b></div>
+      <div class="stat"><div>Загрузка</div><b>${hoursSold}/${totalHours} ч · ${totalHours ? Math.round((hoursSold / totalHours) * 100) : 0}%</b></div>
+      <div class="stat"><div>Сумма броней</div><b>${money(revenue)}</b></div>
+      <div class="stat"><div>Предоплат сверено</div><b>${money(prepaid)}</b></div>
+      ${onCheck ? `<div class="stat"><div>Чеки на сверке</div><b style="color:#8fd14f">${money(onCheck)}</b></div>` : ""}
+    </div>
+    <div class="grid-wrap"><table class="sched">
+      <thead><tr><th></th>${fields.map((f) => `<th>${esc(f.name)}<div class="muted" style="font-weight:400;font-size:11px">${esc(f.note || "")}</div></th>`).join("")}</tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    ${!fields.length ? '<p class="empty">На этом адресе нет включённых полей — добавьте в Настройках</p>' : ""}
+    ${bookings.some((b) => !b.live && ids.has(b.fieldId)) ? `<h2>Отменённые / просроченные</h2><div class="card list">${bookings.filter((b) => !b.live && ids.has(b.fieldId)).map((b) => `
+      <div class="item"><div class="grow"><b>${esc(b.name)}</b> <span class="muted">${esc(b.phone)} · ${esc(b.fieldName)} · ${rangeLabel(b.hours)}</span></div>
+      <span class="pill ${b.expired ? "expired" : "cancelled"}">${b.expired ? "Не оплатил вовремя" : "Отменена"}</span>
+      <button class="btn small" data-id="${b.id}">Открыть</button></div>`).join("")}</div>` : ""}`;
+
+  $$("[data-loc]").forEach((b) => b.onclick = () => { loc = b.dataset.loc; saveLocal("aloc", loc); schedView(); });
+  $("#prev").onclick = () => { date = addDays(date, -1); loadSched(); };
+  $("#next").onclick = () => { date = addDays(date, 1); loadSched(); };
+  $("#today").onclick = () => { date = dayKey(Date.now()); loadSched(); };
+  $("#dp").onchange = (e) => { if (e.target.value) { date = e.target.value; loadSched(); } };
+  $$(".cell.free").forEach((c) => c.onclick = () => bookForm(c.dataset.f, +c.dataset.h));
+  $$("[data-id]").forEach((c) => c.onclick = () => bookingCard(bookings.find((b) => b.id === c.dataset.id)));
+}
+
+function bookForm(fieldId, h0) {
+  const fields = cfg.fields.filter((f) => f.active !== false && f.locationId === loc);
+  const busy = (fid) => new Set(bookings.filter((b) => b.live && b.fieldId === fid).flatMap((b) => b.hours));
+  let fid = fieldId, hrs = new Set([h0]);
+  const draw = () => {
+    const f = fields.find((x) => x.id === fid);
+    const bz = busy(fid);
+    const auto = [...hrs].reduce((s, h) => s + priceInfo(cfg, f, date, h).price, 0);
+    $("#hrs").innerHTML = Array.from({ length: cfg.close - cfg.open }, (_, i) => cfg.open + i)
+      .map((h) => `<button type="button" data-h="${h}" class="${hrs.has(h) ? "on" : ""}" ${bz.has(h) ? "disabled" : ""}>${hourLabel(h)}</button>`).join("");
+    $$("#hrs button").forEach((b) => b.onclick = () => { const h = +b.dataset.h; hrs.has(h) ? hrs.delete(h) : hrs.add(h); draw(); });
+    $("#total").placeholder = money(auto) + " (по прайсу)";
+    $("#htitle").textContent = hrs.size ? rangeLabel(hrs) : "выберите часы";
+  };
+  modal(`<form id="bf"><h3>Новая бронь</h3>
+    <p class="muted" style="margin-top:-8px">📍 ${esc(locName(loc))} · ${dateLong(date)} · <span id="htitle"></span></p>
+    <label class="f">Поле<select name="fieldId">${fields.map((f) => `<option value="${f.id}" ${f.id === fid ? "selected" : ""}>${esc(f.name)}</option>`).join("")}</select></label>
+    <div class="f" style="font-size:13px;color:var(--muted);margin-bottom:12px">Часы<div class="hrs" id="hrs"></div></div>
+    <div class="two">
+      <label class="f">Телефон<input name="phone" type="tel" list="cl" placeholder="+7…" autocomplete="off"></label>
+      <label class="f">Имя<input name="name" required></label>
+    </div>
+    <datalist id="cl">${clients.map((c) => `<option value="${esc(c.phone)}">${esc(c.name)}${c.regular ? " ★" : ""}</option>`).join("")}</datalist>
+    <div class="two">
+      <label class="f">Сумма, ₸<input name="total" id="total" type="number" min="0" step="500"></label>
+      <label class="f">Оплата<select name="status"><option value="unpaid">Без предоплаты</option><option value="paid">Предоплата получена</option></select></label>
+    </div>
+    <label class="f" style="display:flex;gap:10px;align-items:center;color:var(--text)"><input type="checkbox" name="rep" id="rep"> Постоянник — повторять каждую неделю</label>
+    <label class="f" id="wk" hidden>Сколько недель вперёд<input name="weeks" type="number" min="2" max="26" value="8"></label>
+    <label class="f">Заметка<textarea name="note" placeholder="Например: команда, оплата наличными"></textarea></label>
+    <button class="btn main block" id="sv">Забронировать</button>
+    <button type="button" class="btn block" style="margin-top:8px" id="cx">Отмена</button></form>`);
+  draw();
+  const form = $("#bf");
+  form.fieldId.onchange = (e) => { fid = e.target.value; const bz = busy(fid); hrs = new Set([...hrs].filter((h) => !bz.has(h))); draw(); };
+  form.phone.oninput = (e) => {
+    const c = clientOf(normPhone(e.target.value));
+    if (c) { form.name.value = c.name; if (c.regular) form.rep.checked = true, ($("#wk").hidden = false); }
+  };
+  form.rep.onchange = (e) => ($("#wk").hidden = !e.target.checked);
+  $("#cx").onclick = closeModal;
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    if (!hrs.size) return toast("Выберите часы", true);
+    const fd = Object.fromEntries(new FormData(form));
+    $("#sv").disabled = true;
+    try {
+      const r = await api("POST", "/admin/book", { body: {
+        date, fieldId: fid, hours: [...hrs], name: fd.name, phone: fd.phone, total: fd.total || null,
+        status: fd.status, note: fd.note, regular: !!fd.rep, weeks: fd.rep ? +fd.weeks : 1,
+      } });
+      closeModal();
+      toast(r.made.length > 1 ? `Создано броней: ${r.made.length}` : "Бронь создана");
+      if (r.skipped.length) setTimeout(() => toast("Заняты даты, пропущено: " + r.skipped.map((d) => d.slice(8) + "." + d.slice(5, 7)).join(", "), true), 600);
+      await loadClients(); loadSched(true);
+    } catch (err) { toast(err.message, true); $("#sv").disabled = false; }
+  };
+}
+
+function bookingCard(b) {
+  if (!b) return;
+  const c = clientOf(b.phone);
+  const left = b.total - (["paid", "prelim"].includes(b.status) ? b.prepay : 0);
+  const r = b.receipt;
+  const rc = r ? `<div class="card rc" style="padding:14px;margin-bottom:14px">
+      <b>Чек</b>${r.amount != null ? `<div class="muted" style="font-size:13px;margin-top:4px">Сумма ${money(r.amount)} · ${esc(r.recipient || "—")} · ${esc(r.datetime || "—")} · № ${esc(r.number || "—")}</div>` : ""}
+      <div class="checks" style="margin-top:6px">${(r.checks || []).map((c) => `<div class="${c.ok ? "ok" : "bad"}">${c.ok ? "✓" : "✗"} ${esc(c.text)}</div>`).join("")}</div>
+      <button class="btn small" id="showrc" style="margin-top:8px">Посмотреть чек</button><div id="rcbox"></div></div>` : "";
+  modal(`<h3>${c?.regular ? "★ " : ""}${esc(b.name)}</h3>
+    <p style="margin-top:-8px"><span class="pill ${b.expired ? "expired" : b.status}">${b.expired ? "Не оплатил вовремя" : STATUS[b.status]}</span>
+      <span class="muted" style="font-size:12px"> · через ${SRC[b.source] || b.source}${b.series ? " · серия" : ""}</span></p>
+    <div class="card" style="padding:14px;margin-bottom:14px">
+      <div>${b.locationName ? "📍 " + esc(b.locationName) + " · " : ""}${esc(b.fieldName)} · ${dateLong(b.date)} · <b>${rangeLabel(b.hours)}</b></div>
+      <div class="muted" style="margin-top:4px">Сумма ${money(b.total)}${b.fullTotal && b.fullTotal > b.total ? ` (без скидки ${money(b.fullTotal)})` : ""} · предоплата ${money(b.prepay)}${["paid", "prelim"].includes(b.status) ? ` · остаток на месте <b style="color:var(--text)">${money(left)}</b>` : ""}</div>
+      ${b.phone ? `<div class="row" style="margin-top:10px"><a class="btn small" href="tel:${esc(b.phone)}">📞 ${esc(b.phone)}</a><a class="btn small" href="${waLink(b.phone)}" target="_blank" rel="noopener">WhatsApp</a></div>` : ""}
+    </div>
+    ${rc}
+    <form id="ef">
+      <div class="two"><label class="f">Имя<input name="name" value="${esc(b.name)}"></label><label class="f">Сумма, ₸<input name="total" type="number" value="${b.total}"></label></div>
+      <label class="f">Заметка<textarea name="note">${esc(b.note || "")}</textarea></label>
+      <button class="btn block small" id="esave">Сохранить изменения</button>
+    </form>
+    <div style="display:grid;gap:8px;margin-top:14px">
+      ${b.status !== "paid" ? `<button class="btn main block" data-st="paid">${b.status === "prelim" || b.status === "claimed" ? "✓ Деньги пришли в Kaspi" : "✓ Предоплата получена"}</button>` : ""}
+      ${b.status === "hold" || b.status === "claimed" || b.status === "cancelled" ? `<button class="btn block" data-st="unpaid">${b.status === "cancelled" ? "Восстановить без предоплаты" : "Подтвердить без предоплаты"}</button>` : ""}
+      ${b.phone ? `<button class="btn block" id="reg">${c?.regular ? "Убрать из постоянников" : "★ Отметить постоянником"}</button>` : ""}
+      ${b.status !== "cancelled" ? `<button class="btn danger block" data-st="cancelled">Отменить бронь</button>` : ""}
+      ${b.status !== "cancelled" && b.series ? `<button class="btn danger block" data-st="cancelled" data-all="1">Отменить эту и все следующие в серии</button>` : ""}
+      <button class="btn block" id="cx">Закрыть</button>
+    </div>`);
+  $("#cx").onclick = closeModal;
+  const sr = $("#showrc");
+  if (sr) sr.onclick = async () => {
+    sr.disabled = true;
+    try {
+      const f = await api("GET", "/admin/receipt", { query: { id: b.id } });
+      const url = URL.createObjectURL(new Blob([Uint8Array.from(atob(f.b64), (c) => c.charCodeAt(0))], { type: f.type }));
+      $("#rcbox").innerHTML = f.type === "application/pdf"
+        ? `<a class="btn small" style="display:inline-block;margin-top:8px" href="${url}" target="_blank" rel="noopener">Открыть PDF</a>`
+        : `<img src="${url}" alt="Чек">`;
+    } catch (e) { toast(e.message, true); sr.disabled = false; }
+  };
+  $("#ef").onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = Object.fromEntries(new FormData(e.target));
+    try { await api("POST", "/admin/update", { body: { date: b.date, id: b.id, ...fd } }); closeModal(); toast("Сохранено"); route(); }
+    catch (err) { toast(err.message, true); }
+  };
+  $$("[data-st]").forEach((btn) => btn.onclick = async () => {
+    if (btn.dataset.st === "cancelled" && !confirmInline(btn)) return;
+    try {
+      await api("POST", "/admin/status", { body: { date: b.date, id: b.id, status: btn.dataset.st, all: !!btn.dataset.all } });
+      closeModal(); toast("Готово"); route();
+    } catch (err) { toast(err.message, true); }
+  });
+  const reg = $("#reg");
+  if (reg) reg.onclick = async () => {
+    await api("POST", "/admin/client", { body: { phone: b.phone, regular: !c?.regular } });
+    await loadClients(); closeModal(); toast(c?.regular ? "Убран из постоянников" : "Отмечен постоянником ★"); route();
+  };
+}
+// подтверждение без системных диалогов: первый клик — «точно?», второй — действие
+function confirmInline(btn) {
+  if (btn.dataset.sure) return true;
+  btn.dataset.sure = "1"; btn.dataset.txt = btn.textContent; btn.textContent = "Нажмите ещё раз для подтверждения";
+  setTimeout(() => { if (btn.isConnected) { delete btn.dataset.sure; btn.textContent = btn.dataset.txt; } }, 3000);
+  return false;
+}
+
+// ---------- Ждут оплаты ----------
+async function pendingView() {
+  $("#app").innerHTML = '<p class="empty">Загрузка…</p>';
+  const p = await refreshPending();
+  const ord = { claimed: 0, prelim: 1, hold: 2 };
+  p.sort((a, b) => ord[a.status] - ord[b.status] || a.date.localeCompare(b.date));
+  const LBL = { claimed: "Проверить вручную", prelim: "Чек принят", hold: "Ждёт оплаты" };
+  $("#app").innerHTML = `<h2>Сверка оплат</h2>
+    <p class="muted" style="font-size:13px">«Чек принят» — бронь уже подтверждена клиенту, сверьте поступление в Kaspi Pay и нажмите «Деньги пришли». «Проверить вручную» — чек не прошёл автопроверку, посмотрите его. «Ждёт оплаты» — клиент ещё оплачивает, слот держится ${cfg.holdMinutes} мин.</p>
+    ${p.length ? `<div class="card list">${p.map((b) => `<div class="item">
+      <div class="grow"><b>${esc(b.name)}</b> <span class="muted">${esc(b.phone)}</span>
+      <div class="muted" style="font-size:13px">${dateLong(b.date)} · ${esc(b.locationName || "")} ${esc(b.fieldName)} · ${rangeLabel(b.hours)} · предоплата <b style="color:var(--text)">${money(b.prepay)}</b></div></div>
+      <span class="pill ${b.status}">${LBL[b.status]}</span>
+      ${b.receipt ? `<button class="btn small" data-open="${b.id}">Чек</button>` : ""}
+      <button class="btn small main" data-ok="${b.id}" data-d="${b.date}">Деньги пришли</button>
+      <button class="btn small danger" data-no="${b.id}" data-d="${b.date}">Отменить</button></div>`).join("")}</div>`
+      : '<p class="empty">Всё сверено 👌</p>'}`;
+  $$("[data-open]").forEach((x) => x.onclick = () => bookingCard(p.find((b) => b.id === x.dataset.open)));
+  $$("[data-ok]").forEach((x) => x.onclick = async () => {
+    try { await api("POST", "/admin/status", { body: { date: x.dataset.d, id: x.dataset.ok, status: "paid" } }); toast("Подтверждено"); pendingView(); }
+    catch (e) { toast(e.message, true); }
+  });
+  $$("[data-no]").forEach((x) => x.onclick = async () => {
+    if (!confirmInline(x)) return;
+    try { await api("POST", "/admin/status", { body: { date: x.dataset.d, id: x.dataset.no, status: "cancelled" } }); toast("Отменено"); pendingView(); }
+    catch (e) { toast(e.message, true); }
+  });
+}
+
+// ---------- Клиенты ----------
+async function clientsView(q = "") {
+  await loadClients();
+  const draw = () => {
+    const s = q.toLowerCase();
+    const list = clients.filter((c) => !s || c.name.toLowerCase().includes(s) || c.phone.includes(s.replace(/\D/g, "") || "§"));
+    $("#list").innerHTML = list.length ? list.map((c) => `<div class="item">
+      <button class="star ${c.regular ? "on" : ""}" data-p="${esc(c.phone)}" title="Постоянник">★</button>
+      <div class="grow"><b>${esc(c.name)}</b> <span class="muted">${esc(c.phone)}</span>
+        <div class="muted" style="font-size:12px">Броней: ${c.count || 0}${c.last ? ` · последняя ${c.last.slice(8)}.${c.last.slice(5, 7)}` : ""}${c.note ? ` · ${esc(c.note)}` : ""}</div></div>
+      <a class="btn small" href="${waLink(c.phone)}" target="_blank" rel="noopener">WhatsApp</a>
+      <button class="btn small" data-n="${esc(c.phone)}">Заметка</button></div>`).join("")
+      : '<p class="empty">Клиентов пока нет — они появятся после первых броней</p>';
+    $$(".star").forEach((b) => b.onclick = async () => {
+      const c = clientOf(b.dataset.p);
+      await api("POST", "/admin/client", { body: { phone: c.phone, regular: !c.regular } });
+      c.regular = !c.regular; draw();
+    });
+    $$("[data-n]").forEach((b) => b.onclick = () => {
+      const c = clientOf(b.dataset.n);
+      modal(`<form id="nf"><h3>${esc(c.name)}</h3>
+        <label class="f">Имя<input name="name" value="${esc(c.name)}"></label>
+        <label class="f">Заметка<textarea name="note">${esc(c.note || "")}</textarea></label>
+        <button class="btn main block">Сохранить</button></form>`);
+      $("#nf").onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = Object.fromEntries(new FormData(e.target));
+        await api("POST", "/admin/client", { body: { phone: c.phone, ...fd } });
+        closeModal(); await loadClients(); draw();
+      };
+    });
+  };
+  const regs = clients.filter((c) => c.regular).length;
+  $("#app").innerHTML = `<h2>Клиенты · ${clients.length} · постоянников ${regs}</h2>
+    <input class="inp" id="q" placeholder="Поиск по имени или телефону" value="${esc(q)}" style="margin-bottom:12px">
+    <div class="card list" id="list"></div>`;
+  $("#q").oninput = (e) => { q = e.target.value; draw(); };
+  draw();
+}
+
+// ---------- Скидки ----------
+function discountsView() {
+  const list = structuredClone(cfg.discounts || []);
+  const DN = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"], DV = [1, 2, 3, 4, 5, 6, 0];
+  const fields = cfg.fields.filter((f) => f.active !== false);
+  const fmtD = (d) => d ? `${d.slice(8)}.${d.slice(5, 7)}` : "";
+  const desc = (d) => [
+    d.dateFrom || d.dateTo ? (d.dateFrom === d.dateTo ? fmtD(d.dateFrom) : `${fmtD(d.dateFrom) || "…"}–${fmtD(d.dateTo) || "…"}`) : "",
+    d.days?.length ? DV.filter((x) => d.days.includes(x)).map((x) => DN[DV.indexOf(x)]).join(", ") : (d.dateFrom || d.dateTo ? "" : "каждый день"),
+    `${hourLabel(d.from)}–${hourLabel(d.to)}`,
+    d.fields?.length ? fields.filter((f) => d.fields.includes(f.id)).map((f) => locName(f.locationId) + " " + f.name).join(", ") : "все поля",
+  ].filter(Boolean).join(" · ");
+  const save = async () => {
+    try { const r = await api("POST", "/admin/discounts", { body: { discounts: list } }); cfg.discounts = r.discounts; toast("Скидки сохранены"); discountsView(); }
+    catch (e) { toast(e.message, true); }
+  };
+  $("#app").innerHTML = `<h2>Скидки</h2>
+    <p class="muted" style="font-size:13px">Клиент видит скидку на сайте: зачёркнутую цену, метку −% на часах и на днях. Если на час подходят несколько скидок — действует самая большая.</p>
+    <div class="card list">${list.length ? list.map((d, i) => `<div class="item">
+      <input type="checkbox" data-act="${i}" ${d.active !== false ? "checked" : ""} title="Включена">
+      <div class="grow"><b>−${d.percent}% · ${esc(d.title)}</b><div class="muted" style="font-size:12px">${esc(desc(d))}</div></div>
+      <button class="btn small" data-ed="${i}">Изменить</button>
+      <button class="btn small danger" data-del="${i}">Удалить</button></div>`).join("") : '<p class="empty">Скидок пока нет</p>'}</div>
+    <button class="btn main block" style="margin-top:12px" id="addd">+ Добавить скидку</button>`;
+  $$("[data-act]").forEach((x) => x.onchange = () => { list[+x.dataset.act].active = x.checked; save(); });
+  $$("[data-del]").forEach((x) => x.onclick = () => { if (!confirmInline(x)) return; list.splice(+x.dataset.del, 1); save(); });
+  $$("[data-ed]").forEach((x) => x.onclick = () => edit(+x.dataset.ed));
+  $("#addd").onclick = () => edit(-1);
+
+  function edit(i) {
+    const d = i >= 0 ? list[i] : { title: "", percent: 20, dateFrom: "", dateTo: "", days: [], from: cfg.open, to: Math.min(cfg.open + 4, cfg.close), fields: [], active: true };
+    const days = new Set(d.days || []), fs = new Set(d.fields || []);
+    modal(`<form id="df"><h3>${i >= 0 ? "Скидка" : "Новая скидка"}</h3>
+      <div class="two"><label class="f">Название (видит клиент)<input name="title" required value="${esc(d.title)}" placeholder="Утро будни"></label>
+      <label class="f">Скидка, %<input name="percent" type="number" min="1" max="90" required value="${d.percent}"></label></div>
+      <div class="two"><label class="f">С даты (необязательно)<input name="dateFrom" type="date" value="${d.dateFrom || ""}"></label>
+      <label class="f">По дату (необязательно)<input name="dateTo" type="date" value="${d.dateTo || ""}"></label></div>
+      <div class="f" style="font-size:13px;color:var(--muted)">Дни недели (не выбрано — все дни)<div class="hrs" id="dd">${DV.map((v, k) => `<button type="button" data-v="${v}" class="${days.has(v) ? "on" : ""}">${DN[k]}</button>`).join("")}</div></div>
+      <div class="two"><label class="f">С часа<select name="from">${Array.from({ length: cfg.close - cfg.open }, (_, k) => cfg.open + k).map((h) => `<option value="${h}" ${h === +d.from ? "selected" : ""}>${hourLabel(h)}</option>`).join("")}</select></label>
+      <label class="f">До часа<select name="to">${Array.from({ length: cfg.close - cfg.open }, (_, k) => cfg.open + k + 1).map((h) => `<option value="${h}" ${h === +d.to ? "selected" : ""}>${hourLabel(h)}</option>`).join("")}</select></label></div>
+      ${fields.length > 1 ? `<div class="f" style="font-size:13px;color:var(--muted)">Поля (не выбрано — все)<div class="hrs" id="ff">${fields.map((f) => `<button type="button" data-v="${f.id}" class="${fs.has(f.id) ? "on" : ""}">${esc(locName(f.locationId))} · ${esc(f.name)}</button>`).join("")}</div></div>` : ""}
+      <button class="btn main block" style="margin-top:8px">Сохранить</button>
+      <button type="button" class="btn block" style="margin-top:8px" id="cx">Отмена</button></form>`);
+    $$("#dd button").forEach((b) => b.onclick = () => { const v = +b.dataset.v; days.has(v) ? days.delete(v) : days.add(v); b.classList.toggle("on"); });
+    $$("#ff button").forEach((b) => b.onclick = () => { const v = b.dataset.v; fs.has(v) ? fs.delete(v) : fs.add(v); b.classList.toggle("on"); });
+    $("#cx").onclick = closeModal;
+    $("#df").onsubmit = (e) => {
+      e.preventDefault();
+      const fd = Object.fromEntries(new FormData(e.target));
+      if (+fd.to <= +fd.from) return toast("«До часа» должно быть позже «С часа»", true);
+      if (fd.dateFrom && fd.dateTo && fd.dateTo < fd.dateFrom) return toast("Дата окончания раньше начала", true);
+      const nd = { ...d, ...fd, percent: +fd.percent, from: +fd.from, to: +fd.to, days: [...days], fields: [...fs] };
+      if (i >= 0) list[i] = nd; else list.push(nd);
+      closeModal(); save();
+    };
+  }
+}
+
+// ---------- Настройки ----------
+function settingsView() {
+  const c = structuredClone(cfg);
+  const lRow = (l, i) => `<tr data-li="${i}">
+    <td><input data-k="name" value="${esc(l.name)}"></td>
+    <td><input data-k="address" value="${esc(l.address)}"></td>
+    <td><input data-k="map" value="${esc(l.map)}" placeholder="https://2gis.kz/…"></td></tr>`;
+  const fRow = (f, i) => `<tr data-i="${i}">
+    <td><select data-k="locationId" style="width:100%;padding:9px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--text)">${c.locations.map((l) => `<option value="${l.id}" ${l.id === f.locationId ? "selected" : ""}>${esc(l.name)}</option>`).join("")}</select></td>
+    <td><input data-k="name" value="${esc(f.name)}"></td>
+    <td><input data-k="note" value="${esc(f.note || "")}" placeholder="7×7, крытое…"></td>
+    <td><input data-k="priceDay" type="number" step="500" value="${f.priceDay}"></td>
+    <td><input data-k="eveningFrom" type="number" min="0" max="28" value="${f.eveningFrom}" style="width:64px"></td>
+    <td><input data-k="priceEvening" type="number" step="500" value="${f.priceEvening}"></td>
+    <td><input data-k="priceWeekend" type="number" step="500" value="${f.priceWeekend}"></td>
+    <td style="text-align:center"><input data-k="active" type="checkbox" ${f.active !== false ? "checked" : ""}></td></tr>`;
+  $("#app").innerHTML = `<form id="sf">
+    <h2>Арена</h2><div class="card">
+      <div class="two"><label class="f">Название<input name="name" value="${esc(c.name)}"></label><label class="f">Телефон для клиентов<input name="phone" value="${esc(c.phone)}"></label></div>
+
+      <div class="two"><label class="f">Открытие (час)<input name="open" type="number" min="0" max="23" value="${c.open}"></label>
+      <label class="f">Закрытие (час, 24 = полночь, 26 = 02:00)<input name="close" type="number" min="1" max="28" value="${c.close}"></label></div>
+      <label class="f">Бронирование открыто на, дней вперёд<input name="daysAhead" type="number" min="1" max="90" value="${c.daysAhead}"></label>
+    </div>
+    <h2>Адреса</h2><div class="card" style="overflow-x:auto">
+      <table class="fields"><thead><tr><th>Название</th><th>Адрес</th><th>Ссылка 2ГИС</th></tr></thead>
+      <tbody id="lb">${c.locations.map(lRow).join("")}</tbody></table>
+      <p class="muted" style="font-size:12px;margin-bottom:0">Новый адрес добавьте здесь и сохраните — потом его можно выбрать у поля.</p>
+      <button type="button" class="btn small" id="addl" style="margin-top:10px">+ Добавить адрес</button>
+    </div>
+    <h2>Поля и цены за час, ₸</h2><div class="card" style="overflow-x:auto">
+      <table class="fields"><thead><tr><th>Адрес</th><th>Название</th><th>Описание</th><th>День</th><th>Вечер с</th><th>Вечер</th><th>Сб–Вс</th><th>Вкл</th></tr></thead>
+      <tbody id="fb">${c.fields.map(fRow).join("")}</tbody></table>
+      <button type="button" class="btn small" id="addf" style="margin-top:10px">+ Добавить поле</button>
+      <p class="muted" style="font-size:12px;margin-bottom:0">Цена «Сб–Вс» действует весь день в выходные. Если оставить 0 — в выходные работают дневная и вечерняя цены.</p>
+    </div>
+    <h2>Предоплата</h2><div class="card">
+      <div class="two"><label class="f">Предоплата, % (0 — бронь без предоплаты)<input name="prepayPercent" type="number" min="0" max="100" value="${c.prepayPercent}"></label>
+      <label class="f">Сколько минут держать слот на оплату<input name="holdMinutes" type="number" min="5" max="120" value="${c.holdMinutes}"></label></div>
+      <label class="f">Ссылка Kaspi Pay / Kaspi QR (кнопка «Оплатить в Kaspi»)<input name="kaspiLink" value="${esc(c.kaspiLink)}" placeholder="https://pay.kaspi.kz/pay/…"></label>
+      <div class="two"><label class="f">Номер для перевода<input name="kaspiPhone" value="${esc(c.kaspiPhone)}"></label>
+      <label class="f">Получатель, как пишется в чеке (напр. «Нурбек Ж.») — по нему проверяется чек<input name="kaspiName" value="${esc(c.kaspiName)}"></label></div>
+    </div>
+    <button class="btn main block" style="margin-top:16px" id="ss">Сохранить настройки</button></form>`;
+  $("#addf").onclick = () => {
+    c.fields.push({ id: "", locationId: c.locations[0].id, name: "Поле " + (c.fields.length + 1), note: "", priceDay: 10000, priceEvening: 14000, eveningFrom: 18, priceWeekend: 0, active: true });
+    $("#fb").insertAdjacentHTML("beforeend", fRow(c.fields.at(-1), c.fields.length - 1));
+  };
+  $("#addl").onclick = () => {
+    c.locations.push({ id: "", name: "Новый адрес", address: "", map: "" });
+    $("#lb").insertAdjacentHTML("beforeend", lRow(c.locations.at(-1), c.locations.length - 1));
+  };
+  $("#sf").onsubmit = async (e) => {
+    e.preventDefault();
+    const fd = Object.fromEntries(new FormData(e.target));
+    $$("#lb tr").forEach((tr) => {
+      const l = c.locations[+tr.dataset.li];
+      tr.querySelectorAll("input").forEach((inp) => (l[inp.dataset.k] = inp.value));
+    });
+    $$("#fb tr").forEach((tr) => {
+      const f = c.fields[+tr.dataset.i];
+      tr.querySelectorAll("input,select").forEach((inp) => (f[inp.dataset.k] = inp.type === "checkbox" ? inp.checked : inp.value));
+    });
+    try {
+      const r = await api("POST", "/admin/config", { body: { config: { ...c, ...fd, fields: c.fields } } });
+      cfg = { ...cfg, ...r.config };
+      $("#title").textContent = cfg.name;
+      toast("Настройки сохранены");
+      settingsView();
+    } catch (err) { toast(err.message, true); }
+  };
+}
+
+start().catch((e) => ($("#app").innerHTML = `<p class="empty">Ошибка: ${esc(e.message)}</p>`));
+</script>
+</body>
+</html>

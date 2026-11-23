@@ -5,15 +5,22 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>PRIDE FC — бронирование футбольных полей</title>
 <meta name="description" content="Онлайн-бронирование футбольных полей PRIDE FC в Алматы — Жарокова и Мамыр-1. Выберите время, внесите предоплату через Kaspi.">
-<meta name="theme-color" content="#0b120e">
+<meta name="theme-color" content="#03110a">
+<link rel="icon" type="image/png" href="icons/favicon.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PRIDE FC">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div id="demo"></div>
-<header class="top"><div class="wrap" style="padding-bottom:0">
+<header class="top"><div class="wrap">
   <div class="brand">
-    <div class="logo">PFC</div>
-    <div><h1 id="title">PRIDE FC</h1><p id="sub">Бронирование полей онлайн</p></div>
+    <div class="logo"><img src="icons/icon-192.png" alt=""></div>
+    <div><h1 id="title">PRIDE <em>FC</em></h1><p id="sub">Бронирование полей онлайн</p></div>
   </div>
 </div></header>
 
@@ -47,7 +54,7 @@ function toast(msg, bad) {
 async function init() {
   if (await isDemo()) $("#demo").innerHTML = '<div class="demo">Демо-режим: брони сохраняются только в этом браузере. <a href="admin.html">Админка →</a> (пароль: demo)</div>';
   cfg = await call("GET", "/config");
-  $("#title").textContent = cfg.name;
+  $("#title").innerHTML = esc(cfg.name).replace(/^(.*?)(\s+)(\S+)$/, "$1$2<em>$3</em>");
   $("#sub").innerHTML = ["Футбольные поля · Алматы", cfg.phone ? `<a href="tel:${esc(cfg.phone.replace(/[^\d+]/g, ""))}">${esc(cfg.phone)}</a>` : ""].filter(Boolean).join(" · ");
   document.title = cfg.name + " — бронирование";
   const mine = loadLocal("current");
@@ -55,6 +62,19 @@ async function init() {
   loc = cfg.locations.some((l) => l.id === loadLocal("loc")) ? loadLocal("loc") : cfg.locations[0]?.id;
   if (mine) return showBooking(mine.date, mine.id);
   await loadDay();
+}
+function pitchSVG() {
+  let st = "";
+  for (let i = 0; i < 10; i++) st += `<rect x="${i * 16}" y="0" width="16" height="104" fill="${i % 2 ? "#23983f" : "#1d8a37"}"/>`;
+  const L = 'fill="none" stroke="rgba(255,255,255,.85)" stroke-width="1.3"';
+  return `<svg viewBox="0 0 160 104" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${st}
+    <rect x="7" y="7" width="146" height="90" ${L}/><line x1="80" y1="7" x2="80" y2="97" ${L}/>
+    <circle cx="80" cy="52" r="13" ${L}/><circle cx="80" cy="52" r="1.6" fill="#fff"/>
+    <rect x="7" y="30" width="22" height="44" ${L}/><rect x="131" y="30" width="22" height="44" ${L}/>
+    <rect x="7" y="42" width="8" height="20" ${L}/><rect x="145" y="42" width="8" height="20" ${L}/>
+    <rect x="3" y="46" width="4" height="12" fill="rgba(255,255,255,.25)" stroke="#fff" stroke-width="1"/>
+    <rect x="153" y="46" width="4" height="12" fill="rgba(255,255,255,.25)" stroke="#fff" stroke-width="1"/>
+    <path d="M29 44 a10 10 0 0 1 0 16 M131 44 a10 10 0 0 0 0 16" ${L}/></svg>`;
 }
 const locFields = () => day.fields.filter((f) => f.locationId === loc);
 const mapLink = (l) => l?.map ? `<a class="map" href="${esc(l.map)}" target="_blank" rel="noopener">📍 2ГИС</a>` : "";
@@ -76,38 +96,48 @@ function render() {
   }
   const f = locFields().find((x) => x.id === fieldId);
   const locs = cfg.locations.length > 1
-    ? `<h2>Адрес</h2><div class="locs">${cfg.locations.map((l) => `<div class="loc ${l.id === loc ? "on" : ""}" data-l="${l.id}">
+    ? `<div class="locs">${cfg.locations.map((l) => `<div class="loc ${l.id === loc ? "on" : ""}" data-l="${l.id}">
         <div class="grow"><b>${esc(l.name)}</b><span>${esc(l.address)}</span></div>${mapLink(l)}</div>`).join("")}</div>`
-    : `<p class="muted" style="margin:16px 0 0">${esc(cfg.locations[0]?.address || "")} ${mapLink(cfg.locations[0])}</p>`;
-  const tabs = locFields().length > 1
-    ? `<h2>Поле</h2><div class="tabs">${locFields().map((x) => `<button class="tab ${x.id === fieldId ? "on" : ""}" data-f="${x.id}">${esc(x.name)}${x.note ? `<small>${esc(x.note)}</small>` : ""}</button>`).join("")}</div>`
-    : "";
+    : `<div class="loc on"><div class="grow"><b>${esc(cfg.locations[0]?.name || "")}</b><span>${esc(cfg.locations[0]?.address || "")}</span></div>${mapLink(cfg.locations[0])}</div>`;
+  const lf = locFields();
+  const pitches = lf.length
+    ? `<div class="pitches" style="--n:${Math.min(lf.length, 3)}">${lf.map((x) => {
+        const fr = x.slots.filter((s) => s.state === "free").length;
+        return `<button class="pitch ${x.id === fieldId ? "on" : ""}" data-f="${x.id}" aria-label="${esc(x.name)}">${pitchSVG()}
+          <div class="pl"><b>${esc(x.name)}</b><span>${x.note ? esc(x.note) + " · " : ""}${fr ? `свободно ${fr} ч` : "мест нет"}</span></div></button>`;
+      }).join("")}</div>`
+    : '<p class="empty">Нет доступных полей</p>';
   const free = f ? f.slots.filter((s) => s.state === "free").length : 0;
-  $("#app").innerHTML = `
-    ${locs}
-    <h2>Дата</h2><div class="days">${days.join("")}</div>
-    ${tabs}
-    <h2>Время · ${dateLong(date)}</h2>
-    ${day.promos?.filter((p) => !p.fields?.length || p.fields.includes(fieldId)).length ? `<div class="promo">🔥 ${day.promos.filter((p) => !p.fields?.length || p.fields.includes(fieldId)).map((p) => `<span><b>−${p.percent}%</b> ${esc(p.title)} · ${hourLabel(p.from)}–${hourLabel(p.to)}</span>`).join("")}</div>` : ""}
-    ${!f ? '<p class="empty">Нет доступных полей</p>' : free === 0 ? '<p class="empty">На этот день свободного времени нет — выберите другую дату</p>' : ""}
-    <div class="slots">${(f?.slots || []).map((s) => `
-      <button class="slot ${s.state} ${sel.has(s.h) ? "on" : ""}" data-h="${s.h}" ${s.state !== "free" ? "disabled" : ""}>
-        ${s.pct && s.state === "free" ? `<i class="stag">−${s.pct}%</i>` : ""}
-        <b>${hourLabel(s.h)}</b><span>${s.pct ? `<s>${money(s.base)}</s> ` : ""}${money(s.price)}</span>
-      </button>`).join("")}</div>
-    <p class="muted" style="font-size:13px;margin-top:18px">Можно выбрать несколько часов подряд. ${cfg.prepayPercent ? `Для брони нужна предоплата ${cfg.prepayPercent}% через Kaspi, остаток — на месте.` : ""}</p>`;
+  const promos = (day.promos || []).filter((p) => !p.fields?.length || p.fields.includes(fieldId));
+  $("#app").innerHTML = `<div class="dash">
+    <section class="panel a-loc"><h2>Адрес</h2>${locs}</section>
+    <section class="panel a-pitch"><h2>Поле</h2>${pitches}</section>
+    <section class="panel a-time">
+      <h2>Дата</h2><div class="days">${days.join("")}</div>
+      ${promos.length ? `<div class="promo">🔥 ${promos.map((p) => `<span><b>−${p.percent}%</b> ${esc(p.title)} · ${hourLabel(p.from)}–${hourLabel(p.to)}</span>`).join("")}</div>` : ""}
+      <h2 class="h2b">Время · ${dateLong(date)}</h2>
+      ${f && free === 0 ? '<p class="empty">На этот день свободного времени нет — выберите другую дату</p>' : ""}
+      <div class="slots">${(f?.slots || []).map((s) => `
+        <button class="slot ${s.state} ${sel.has(s.h) ? "on" : ""}" data-h="${s.h}" ${s.state !== "free" ? "disabled" : ""}>
+          ${s.pct && s.state === "free" ? `<i class="stag">−${s.pct}%</i>` : ""}
+          <b>${hourLabel(s.h)}</b><span>${s.pct ? `<s>${money(s.base)}</s> ` : ""}${money(s.price)}</span>
+        </button>`).join("")}</div>
+      <p class="muted" style="font-size:13px;margin:16px 0 0">Можно выбрать несколько часов подряд. ${cfg.prepayPercent ? `Для брони нужна предоплата ${cfg.prepayPercent}% через Kaspi, остаток — на месте.` : ""}</p>
+    </section></div>`;
   document.querySelectorAll(".day").forEach((b) => b.onclick = () => { date = b.dataset.d; sel.clear(); loadDay(); });
   document.querySelectorAll(".loc").forEach((b) => b.onclick = (e) => {
     if (e.target.closest(".map")) return;
     loc = b.dataset.l; saveLocal("loc", loc); fieldId = locFields()[0]?.id; sel.clear(); render();
   });
-  document.querySelectorAll(".tab").forEach((b) => b.onclick = () => { fieldId = b.dataset.f; sel.clear(); render(); });
+  document.querySelectorAll(".pitch").forEach((b) => b.onclick = () => { fieldId = b.dataset.f; sel.clear(); render(); });
   document.querySelectorAll(".slot.free").forEach((b) => b.onclick = () => {
     const h = +b.dataset.h;
     sel.has(h) ? sel.delete(h) : sel.add(h);
     render();
   });
-  document.querySelector(".day.on")?.scrollIntoView({ inline: "center", block: "nearest" });
+  const dd = $(".days"), on = $(".day.on");
+  if (dd && on) dd.scrollLeft = on.offsetLeft - dd.clientWidth / 2 + on.offsetWidth / 2;
+  requestAnimationFrame(() => document.body.classList.add("ready"));
   renderBar();
 }
 
@@ -178,8 +208,7 @@ async function showBooking(d, id, b) {
   const again = `<button class="btn block" style="margin-top:12px" id="again">Забронировать ещё</button>`;
   let body = "";
 
-  const checksHtml = b.receipt?.checks?.length && b.status === "hold" ? `<div class="checks"><b>Чек не прошёл проверку:</b>${b.receipt.checks.map((c) => `<div class="${c.ok ? "ok" : "bad"}">${c.ok ? "✓" : "✗"} ${esc(c.text)}</div>`).join("")}
-      <button class="btn block small" style="margin-top:10px" id="claim">Всё верно — отправить чек администратору</button></div>` : "";
+  const checksHtml = "";
   const uploader = `<label class="btn main block upl" id="upl">📎 ${b.receipt ? "Прикрепить другой чек" : "Прикрепить чек"}<input type="file" id="file" accept="application/pdf,image/*" hidden></label>
       <p class="muted" style="font-size:12px;margin:8px 0 0">В Kaspi откройте перевод → «Поделиться» → PDF. Или прикрепите скриншот чека.</p>`;
   if (b.status === "hold" && !b.expired) {
@@ -192,13 +221,13 @@ async function showBooking(d, id, b) {
       <div class="muted" style="font-size:13px">Время держим за вами ещё <b id="left" style="color:var(--warn)"></b></div>
       <ol class="steps">
         <li>Переведите предоплату через Kaspi${cfg.kaspiPhone ? ` на номер <b class="copy" data-copy="${esc(cfg.kaspiPhone)}">${esc(cfg.kaspiPhone)}</b>` : ""}${cfg.kaspiName ? ` (${esc(cfg.kaspiName)})` : ""}.${kaspi}</li>
-        <li>Прикрепите чек — бронь подтвердится автоматически.</li>
+        <li>Прикрепите чек — бронь подтвердится сразу.</li>
       </ol>
       ${checksHtml}${uploader}
     </div>`;
   } else if (b.status === "hold" && b.expired) {
     body = `<div class="card" style="margin-top:12px"><span class="pill expired">Время на оплату вышло</span>
-      <p>Если вы уже перевели деньги — прикрепите чек, мы попробуем сохранить бронь.</p>${checksHtml}${uploader}</div>`;
+      <p>Если вы уже перевели деньги — прикрепите чек, и бронь сохранится, если время ещё свободно.</p>${checksHtml}${uploader}</div>`;
   } else if (b.status === "claimed") {
     body = `<div class="card" style="margin-top:12px"><span class="pill claimed">Проверяем оплату</span>
       <p>Администратор проверит перевод и подтвердит бронь. Страница обновится сама.</p></div>`;
@@ -210,7 +239,7 @@ async function showBooking(d, id, b) {
     body = `<div class="card" style="margin-top:12px"><span class="pill cancelled">Бронь отменена</span>
       <p>Если это ошибка — позвоните нам${cfg.phone ? `: <a href="tel:${esc(cfg.phone.replace(/[^\d+]/g, ""))}">${esc(cfg.phone)}</a>` : ""}.</p></div>`;
   }
-  $("#app").innerHTML = head + body + again;
+  $("#app").innerHTML = `<div class="narrow">${head + body + again}</div>`;
 
   document.querySelectorAll(".copy").forEach((el) => el.onclick = () => {
     navigator.clipboard?.writeText(el.dataset.copy).then(() => toast("Номер скопирован"), () => {});
@@ -226,7 +255,7 @@ async function showBooking(d, id, b) {
   if (file) file.onchange = async () => {
     const f = file.files[0];
     if (!f) return;
-    $("#upl").innerHTML = '<span class="spin"></span> Проверяем чек…';
+    $("#upl").innerHTML = '<span class="spin"></span> Отправляем чек…';
     $("#upl").style.pointerEvents = "none";
     try {
       const { type, b64 } = await readReceipt(f);

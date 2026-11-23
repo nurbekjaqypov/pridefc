@@ -39,7 +39,7 @@ function localAdapter() {
 }
 
 async function seedDemo(api, store) {
-  if (await store.get("demo-seeded3")) return;
+  if (await store.get("demo-seeded5")) return;
   for (const k of await store.list("")) await store.del(k);
   await api.handle("POST", "/admin/discounts", {}, { discounts: [
     { title: "Утро будни", percent: 20, days: [1, 2, 3, 4, 5], from: 8, to: 12 },
@@ -55,7 +55,31 @@ async function seedDemo(api, store) {
   await mk(addDays(t, 1), "f1", [19, 20], "Нурлан", "+77012223344", "paid");
   await mk(addDays(t, 1), "f2", [21], "Тимур", "+77473334455", "unpaid");
   await mk(addDays(t, 2), "f1", [18, 19], "Самат", "+77085556677", "paid", 4);
-  await store.set("demo-seeded3", true);
+  // история за 45 дней — чтобы в «Финансах» было что показать
+  const names = [["Ерлан", "+77011234567"], ["Айдос", "+77059876543"], ["Нурлан", "+77012223344"], ["Тимур", "+77473334455"], ["Самат", "+77085556677"], ["Данияр", "+77071112233"], ["Арман", "+77024445566"], ["Команда «Барыс»", "+77770001122"], ["Бекзат", "+77756667788"], ["Ильяс", "+77013339900"]];
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const cfg = (await api.handle("GET", "/admin/config", {}, {}, A)).body;
+  for (let i = -45; i < 0; i++) {
+    const date = addDays(t, i), wd = new Date(date + "T00:00:00Z").getUTCDay();
+    for (const f of cfg.fields) {
+      const taken = new Set();
+      const n = Math.round(rnd() * 4 + (wd === 0 || wd === 6 ? 4 : 2));
+      for (let k = 0; k < n; k++) {
+        const h0 = rnd() < 0.7 ? 17 + Math.floor(rnd() * 7) : 8 + Math.floor(rnd() * 9);
+        const hours = rnd() < 0.3 ? [h0, h0 + 1] : [h0];
+        if (hours.some((h) => taken.has(h) || h >= cfg.close)) continue;
+        hours.forEach((h) => taken.add(h));
+        const [name, phone] = names[Math.floor(rnd() * names.length)];
+        const r = await api.handle("POST", "/admin/book", {}, { date, fieldId: f.id, hours, name, phone, status: rnd() < 0.75 ? "paid" : "unpaid" }, A);
+        const id = r.body?.made?.[0]?.id;
+        if (!id) continue;
+        const b = await store.get(`bk/${date}/${id}`);
+        const x = rnd();
+        await store.set(`bk/${date}/${id}`, { ...b, source: x < 0.6 ? "site" : "admin", ...(x > 0.94 ? { status: "cancelled" } : {}) });
+      }
+    }
+  }
+  await store.set("demo-seeded5", true);
 }
 
 async function detect() {
@@ -66,13 +90,7 @@ async function detect() {
   } catch {}
   mode = "demo";
   const store = localAdapter();
-  // В демо распознавание чека имитируется: считаем, что в чеке ровно сумма предоплаты.
-  const recognize = async (_file, { booking, cfg }) => {
-    const t = new Date(Date.now() + 5 * 3600e3).toISOString();
-    return { is_kaspi: true, status_ok: true, amount: booking.prepay, recipient: cfg.kaspiName || "Демо",
-      datetime: t.slice(0, 10) + " " + t.slice(11, 16), number: "DEMO" + Math.random().toString(36).slice(2, 10) };
-  };
-  local = createApi(store, { adminPassword: "demo", recognize });
+  local = createApi(store, { adminPassword: "demo" });
   await seedDemo(local, store);
 }
 

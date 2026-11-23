@@ -5,56 +5,106 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Админка — PRIDE FC</title>
 <meta name="robots" content="noindex">
-<meta name="theme-color" content="#0b120e">
+<meta name="theme-color" content="#03110a">
+<link rel="icon" type="image/png" href="icons/admin-favicon.png">
+<link rel="apple-touch-icon" href="icons/admin-180.png">
+<link rel="manifest" href="admin.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PFC Админ">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="stylesheet" href="style.css">
 <style>
-  .wrap { max-width: 1100px; }
-  .nav { display: flex; gap: 6px; margin-top: 14px; flex-wrap: wrap; }
-  .nav button { background: none; border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; cursor: pointer; color: var(--muted); }
-  .nav button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
-  .nav .badge { background: var(--warn); color: #000; border-radius: 999px; padding: 0 7px; font-size: 12px; margin-left: 4px; font-weight: 800; }
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin: 14px 0; }
-  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
-  .stat div { color: var(--muted); font-size: 12px; }
-  .stat b { font-size: 20px; }
-  .grid-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); }
+  .nav { display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap; }
+  .nav button { background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; cursor: pointer; color: var(--muted); font-weight: 600; font-size: 14px; }
+  .nav button.on { background: linear-gradient(150deg, var(--accent), var(--accent-2)); color: var(--accent-ink); border-color: transparent; box-shadow: var(--glow); }
+  @media (hover: hover) { .nav button:hover:not(.on) { color: var(--text); border-color: rgba(62,224,122,.45); box-shadow: var(--glow-soft); } }
+  .nav .badge { background: var(--warn); color: #000; border-radius: 999px; padding: 0 7px; font-size: 12px; margin-left: 6px; font-weight: 800; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 14px 0; }
+  .stat { position: relative; overflow: hidden; background: var(--glass); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px;
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 10px 28px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.06); }
+  .stat::after { content: ""; position: absolute; right: -30px; top: -30px; width: 90px; height: 90px; border-radius: 50%; background: radial-gradient(circle, rgba(62,224,122,.22), transparent 70%); }
+  @media (hover: hover) { .stat:hover { transform: translateY(-2px); border-color: rgba(62,224,122,.4); box-shadow: var(--glow-soft); } }
+  .stat div { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .8px; font-weight: 600; }
+  .stat b { display: block; font-size: 24px; font-weight: 800; margin-top: 4px; }
+  .stat small { color: var(--muted); font-size: 12px; }
+  .meter { height: 6px; border-radius: 99px; background: rgba(255,255,255,.08); margin-top: 8px; overflow: hidden; }
+  .meter i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--accent-2), var(--accent)); box-shadow: 0 0 12px var(--accent); transition: width .6s var(--ease); }
+  .chart { display: flex; align-items: flex-end; gap: 4px; height: 90px; padding: 6px 2px 0; }
+  .chart .c { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+  .chart .c i { width: 100%; max-width: 26px; min-height: 3px; border-radius: 6px 6px 3px 3px; background: linear-gradient(180deg, var(--accent), rgba(24,168,79,.35)); box-shadow: 0 0 12px rgba(62,224,122,.35); transition: height .6s var(--ease); }
+  .chart .c.z i { background: rgba(255,255,255,.08); box-shadow: none; }
+  .chart .c span { font-size: 10px; color: var(--muted); }
+  .grid-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 12px 34px rgba(0,0,0,.35); }
   table.sched { border-collapse: collapse; width: 100%; min-width: 520px; }
   .sched th, .sched td { border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); padding: 0; vertical-align: top; }
-  .sched th { background: var(--panel2); padding: 10px; font-size: 13px; text-align: left; position: sticky; top: 0; }
-  .sched td.h { width: 64px; padding: 10px 8px; color: var(--muted); font-size: 13px; background: var(--panel); border-left: 0; }
-  .cell { width: 100%; height: 100%; min-height: 46px; display: block; border: 0; background: none; text-align: left; padding: 8px 10px; cursor: pointer; color: var(--muted); font-size: 12px; }
-  .cell:hover { background: var(--panel2); }
-  .cell.free::before { content: "+ "; color: var(--accent); font-weight: 700; }
-  .bk { height: 100%; padding: 8px 10px; cursor: pointer; border-left: 4px solid var(--muted); background: var(--panel2); font-size: 13px; }
+  .sched th { background: rgba(3,17,10,.75); backdrop-filter: blur(10px); padding: 12px 10px; font-size: 13px; text-align: left; position: sticky; top: 0; z-index: 1; }
+  .sched td.h { width: 64px; padding: 12px 8px; color: var(--muted); font-size: 13px; font-weight: 600; border-left: 0; font-variant-numeric: tabular-nums; }
+  .sched tr:hover td.h { color: var(--accent); }
+  .cell { width: 100%; height: 100%; min-height: 48px; display: block; border: 0; background: none; text-align: left; padding: 9px 10px; cursor: pointer; color: var(--muted); font-size: 12px; }
+  .cell:hover { background: rgba(62,224,122,.08); color: var(--text); box-shadow: inset 0 0 0 1px rgba(62,224,122,.35); }
+  .cell.free::before { content: "+ "; color: var(--accent); font-weight: 800; }
+  .bk { height: 100%; margin: 3px; padding: 8px 10px; cursor: pointer; border-radius: 12px; border: 1px solid var(--line); border-left: 4px solid var(--muted); background: rgba(255,255,255,.05); font-size: 13px; }
+  @media (hover: hover) { .bk:hover { transform: translateY(-1px); box-shadow: var(--glow-soft); } }
   .bk b { display: block; }
-  .bk.paid { border-color: var(--accent); background: #1b2a12; }
-  .bk.unpaid { border-color: #9aa59d; }
-  .bk.hold { border-color: var(--warn); background: #2a2412; }
-  .bk.claimed { border-color: var(--info); background: #12263a; }
-  .bk.prelim { border-color: #8fd14f; background: #1b2a12; border-left-style: dashed; }
+  .bk.paid { border-left-color: var(--accent); background: rgba(62,224,122,.12); }
+  .bk.unpaid { border-left-color: #a9bdb0; }
+  .bk.hold { border-left-color: var(--warn); background: rgba(255,194,74,.1); }
+  .bk.claimed { border-left-color: var(--info); background: rgba(94,194,255,.1); }
+  .bk.prelim { border-left-color: var(--accent); border-left-style: dashed; background: rgba(62,224,122,.07); }
   .cell s { opacity: .6; }
   .cell i { font-style: normal; color: #ff8a6a; font-weight: 700; }
-  .rc img { max-width: 100%; border-radius: 10px; margin-top: 10px; }
-  .checks { font-size: 13px; } .checks .ok { color: var(--accent); } .checks .bad { color: var(--danger); }
-  .past td { opacity: .55; }
-  .list .item { display: flex; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .rc img { max-width: 100%; border-radius: 12px; margin-top: 10px; }
+  .past td { opacity: .5; }
+  .list .item { display: flex; gap: 12px; align-items: center; padding: 12px 4px; border-bottom: 1px solid var(--line); border-radius: 10px; }
+  .list .item:hover { background: rgba(255,255,255,.03); }
   .list .item:last-child { border-bottom: 0; }
-  .star { background: none; border: 0; font-size: 20px; cursor: pointer; color: #556a5c; }
-  .star.on { color: var(--warn); }
+  .star { background: none; border: 0; font-size: 20px; cursor: pointer; color: #4c6555; transition: transform .2s var(--ease), color .2s; }
+  .star:hover { transform: scale(1.2); }
+  .star.on { color: var(--warn); text-shadow: 0 0 12px rgba(255,194,74,.6); }
   table.fields { width: 100%; border-collapse: collapse; font-size: 13px; }
   table.fields th { text-align: left; color: var(--muted); font-weight: 600; padding: 6px 4px; }
   table.fields td { padding: 4px; }
-  table.fields input { width: 100%; padding: 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: 14px; }
+  table.fields input { width: 100%; padding: 9px; border-radius: 10px; border: 1px solid var(--line); background: rgba(0,0,0,.3); color: var(--text); font-size: 14px; }
   .two { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
   .hrs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
-  .hrs button { padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); cursor: pointer; font-size: 13px; }
-  .hrs button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .hrs button { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: rgba(0,0,0,.3); cursor: pointer; font-size: 13px; }
+  .hrs button.on { background: linear-gradient(150deg, var(--accent), var(--accent-2)); color: var(--accent-ink); border-color: transparent; box-shadow: var(--glow-soft); }
   .hrs button:disabled { opacity: .3; cursor: not-allowed; }
+  .top .brand h1 { font-size: 18px; }
+  .fin-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); margin-top: 14px; align-items: start; }
+  .fin-stats { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+  .fin-stats .stat b { font-size: 22px; white-space: nowrap; }
+  .chart .c { min-width: 0; position: relative; }
+  .chart .c span { overflow: hidden; max-width: 100%; }
+  .chart .c em { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); background: rgba(3,17,10,.9); padding: 1px 5px; border-radius: 5px; pointer-events: none; z-index: 2; }
+  .fin-grid .card h2 { margin-bottom: 12px; }
+  .chart.tall { height: 150px; }
+  .chart .c em { font-style: normal; font-size: 10px; color: var(--text); opacity: 0; transition: opacity .2s; white-space: nowrap; }
+  .chart.tall { padding-top: 18px; }
+  .chart .c:hover em { opacity: 1; }
+  .chart .c:hover i { filter: brightness(1.25); box-shadow: 0 0 18px rgba(62,224,122,.6); }
+  .hb { margin-bottom: 12px; }
+  .hb .t { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; margin-bottom: 6px; }
+  .hb .t span { color: var(--muted); }
+  .hb .meter { height: 8px; margin-top: 0; }
+  .delta { font-size: 12px; font-weight: 700; margin-left: 6px; }
+  .delta.up { color: var(--accent); } .delta.down { color: var(--danger); }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .chips button { padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255,255,255,.04); color: var(--muted); cursor: pointer; font-size: 13px; font-weight: 600; transition: all .25s var(--ease); }
+  .chips button.on { background: linear-gradient(150deg, var(--accent), var(--accent-2)); color: var(--accent-ink); border-color: transparent; box-shadow: var(--glow-soft); }
+  .chips input { padding: 7px 10px; border-radius: 10px; border: 1px solid var(--line); background: rgba(0,0,0,.3); color: var(--text); font-size: 13px; }
+  table.top { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.top th { text-align: left; color: var(--muted); font-weight: 600; padding: 6px 4px; font-size: 12px; }
+  table.top td { padding: 8px 4px; border-top: 1px solid var(--line); }
+  table.top td.n, table.top th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  @media (max-width: 560px) { .fin-grid { grid-template-columns: 1fr; } .fin-stats { grid-template-columns: 1fr 1fr; gap: 8px; } .fin-stats .stat { padding: 12px; } .fin-stats .stat b { font-size: 17px; } .fin-stats .stat small { font-size: 11px; } .delta { display: block; margin: 2px 0 0; } }
+  @media (max-width: 560px) { .two { grid-template-columns: 1fr; } .stat b { font-size: 20px; } }
 </style>
 </head>
 <body>
 <div id="demo"></div>
-<header class="top"><div class="wrap" style="padding-bottom:0">
+<header class="top"><div class="wrap">
   <div class="brand">
     <div class="logo">PFC</div>
     <div class="grow"><h1 id="title">PRIDE FC</h1><p>Админ-панель</p></div>
@@ -62,6 +112,7 @@
   </div>
   <div class="nav" id="nav" hidden>
     <button data-v="sched" class="on">Расписание</button>
+    <button data-v="finance">Финансы</button>
     <button data-v="pending">Сверка оплат<span class="badge" id="pc" hidden></span></button>
     <button data-v="discounts">Скидки</button>
     <button data-v="clients">Клиенты</button>
@@ -81,7 +132,7 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const WD = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
 const MON = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
 const dateLong = (d) => `${+d.slice(8)} ${MON[+d.slice(5, 7) - 1]}, ${WD[weekday(d)]}`;
-const STATUS = { hold: "Ждёт оплаты", prelim: "Чек принят — сверить с Kaspi", claimed: "Чек не распознан — проверить вручную", paid: "Предоплата получена", unpaid: "Без предоплаты", cancelled: "Отменена", done: "Завершена" };
+const STATUS = { hold: "Ждёт оплаты", prelim: "Чек прикреплён — сверить с Kaspi", claimed: "Ждёт проверки", paid: "Предоплата получена", unpaid: "Без предоплаты", cancelled: "Отменена", done: "Завершена" };
 const SRC = { site: "сайт", admin: "админ" };
 
 let pass = loadLocal("pass");
@@ -107,7 +158,7 @@ async function start() {
   try { await api("GET", "/admin/check"); } catch { dropLocal("pass"); pass = null; return loginView(); }
   cfg = await api("GET", "/admin/config");
   if (!cfg.locations.some((l) => l.id === loc)) loc = cfg.locations[0].id;
-  $("#title").textContent = cfg.name;
+  $("#title").innerHTML = esc(cfg.name).replace(/^(.*?)(\s+)(\S+)$/, "$1$2<em>$3</em>");
   $("#nav").hidden = false; $("#logout").hidden = false;
   $("#logout").onclick = () => { dropLocal("pass"); location.reload(); };
   $$("#nav button").forEach((b) => b.onclick = () => { view = b.dataset.v; $$("#nav button").forEach((x) => x.classList.toggle("on", x === b)); route(); });
@@ -136,6 +187,7 @@ function route() {
   if (view === "clients") return clientsView();
   if (view === "settings") return settingsView();
   if (view === "discounts") return discountsView();
+  if (view === "finance") return financeView();
 }
 
 async function loadClients() { clients = (await api("GET", "/admin/clients")).clients; }
@@ -167,6 +219,12 @@ function schedView() {
   const prepaid = act.filter((b) => b.status === "paid").reduce((s, b) => s + b.prepay, 0);
   const onCheck = act.filter((b) => b.status === "prelim").reduce((s, b) => s + b.prepay, 0);
 
+  let hourly = "";
+  for (let h = cfg.open; h < cfg.close; h++) {
+    const n = act.filter((b) => b.hours.includes(h)).length;
+    const pct = fields.length ? Math.round((n / fields.length) * 100) : 0;
+    hourly += `<div class="c ${n ? "" : "z"}" title="${hourLabel(h)} — занято ${n} из ${fields.length}"><i style="height:${Math.max(pct, 4)}%"></i><span>${h % 24}</span></div>`;
+  }
   const at = {}; // fieldId -> hour -> booking
   for (const b of act) for (const h of b.hours) (at[b.fieldId] ||= {})[h] = b;
   const skip = {};
@@ -206,12 +264,12 @@ function schedView() {
       <b>${dateLong(date)}</b>
     </div>
     <div class="stats">
-      <div class="stat"><div>Броней</div><b>${act.length}</b></div>
-      <div class="stat"><div>Загрузка</div><b>${hoursSold}/${totalHours} ч · ${totalHours ? Math.round((hoursSold / totalHours) * 100) : 0}%</b></div>
-      <div class="stat"><div>Сумма броней</div><b>${money(revenue)}</b></div>
-      <div class="stat"><div>Предоплат сверено</div><b>${money(prepaid)}</b></div>
-      ${onCheck ? `<div class="stat"><div>Чеки на сверке</div><b style="color:#8fd14f">${money(onCheck)}</b></div>` : ""}
+      <div class="stat"><div>Брони</div><b>${act.length}</b><small>${act.filter((b) => b.source === "site").length} с сайта · ${act.filter((b) => b.source === "admin").length} вручную</small></div>
+      <div class="stat"><div>Загрузка</div><b>${totalHours ? Math.round((hoursSold / totalHours) * 100) : 0}%</b><div class="meter"><i style="width:${totalHours ? Math.round((hoursSold / totalHours) * 100) : 0}%"></i></div><small>${hoursSold} из ${totalHours} ч</small></div>
+      <div class="stat"><div>Выручка дня</div><b>${money(revenue)}</b><small>по всем броням</small></div>
+      <div class="stat"><div>Предоплаты</div><b>${money(prepaid)}</b><small>${onCheck ? `+ ${money(onCheck)} на сверке` : "сверено"}</small></div>
     </div>
+    ${fields.length ? `<div class="card" style="margin-bottom:14px;padding:14px 16px"><h2 style="margin-bottom:6px">Загрузка по часам</h2><div class="chart">${hourly}</div></div>` : ""}
     <div class="grid-wrap"><table class="sched">
       <thead><tr><th></th>${fields.map((f) => `<th>${esc(f.name)}<div class="muted" style="font-weight:400;font-size:11px">${esc(f.note || "")}</div></th>`).join("")}</tr></thead>
       <tbody>${rows}</tbody></table></div>
@@ -365,9 +423,9 @@ async function pendingView() {
   const p = await refreshPending();
   const ord = { claimed: 0, prelim: 1, hold: 2 };
   p.sort((a, b) => ord[a.status] - ord[b.status] || a.date.localeCompare(b.date));
-  const LBL = { claimed: "Проверить вручную", prelim: "Чек принят", hold: "Ждёт оплаты" };
+  const LBL = { claimed: "Ждёт проверки", prelim: "Чек прикреплён", hold: "Ждёт оплаты" };
   $("#app").innerHTML = `<h2>Сверка оплат</h2>
-    <p class="muted" style="font-size:13px">«Чек принят» — бронь уже подтверждена клиенту, сверьте поступление в Kaspi Pay и нажмите «Деньги пришли». «Проверить вручную» — чек не прошёл автопроверку, посмотрите его. «Ждёт оплаты» — клиент ещё оплачивает, слот держится ${cfg.holdMinutes} мин.</p>
+    <p class="muted" style="font-size:13px">«Чек прикреплён» — бронь уже подтверждена клиенту. Откройте чек, сверьте поступление в Kaspi Pay и нажмите «Деньги пришли»; если денег нет — «Отменить». «Ждёт оплаты» — клиент ещё оплачивает, слот держится ${cfg.holdMinutes} мин.</p>
     ${p.length ? `<div class="card list">${p.map((b) => `<div class="item">
       <div class="grow"><b>${esc(b.name)}</b> <span class="muted">${esc(b.phone)}</span>
       <div class="muted" style="font-size:13px">${dateLong(b.date)} · ${esc(b.locationName || "")} ${esc(b.fieldName)} · ${rangeLabel(b.hours)} · предоплата <b style="color:var(--text)">${money(b.prepay)}</b></div></div>
@@ -426,6 +484,121 @@ async function clientsView(q = "") {
     <div class="card list" id="list"></div>`;
   $("#q").oninput = (e) => { q = e.target.value; draw(); };
   draw();
+}
+
+// ---------- Финансы ----------
+const fin = { preset: "month", from: "", to: "", loc: "all" };
+function finRange() {
+  const t = dayKey(Date.now());
+  const m0 = t.slice(0, 8) + "01";
+  if (fin.preset === "7") return [addDays(t, -6), t];
+  if (fin.preset === "30") return [addDays(t, -29), t];
+  if (fin.preset === "month") return [m0, addDays(addDays(m0, 32).slice(0, 8) + "01", -1)];
+  if (fin.preset === "prev") { const p0 = addDays(m0, -1).slice(0, 8) + "01"; return [p0, addDays(m0, -1)]; }
+  return [fin.from || addDays(t, -29), fin.to || t];
+}
+const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+const sum = (arr, f) => arr.reduce((s, x) => s + f(x), 0);
+
+function finStats(bs, from, to) {
+  const fields = cfg.fields.filter((f) => fin.loc === "all" || f.locationId === fin.loc);
+  const ids = new Set(fields.map((f) => f.id));
+  const inLoc = bs.filter((b) => ids.has(b.fieldId));
+  const live = inLoc.filter((b) => b.live);
+  const days = Math.round((Date.parse(to) - Date.parse(from)) / 864e5) + 1;
+  const hours = sum(live, (b) => b.hours.length);
+  const cap = days * fields.filter((f) => f.active !== false).length * (cfg.close - cfg.open);
+  return {
+    fields, live, cancelled: inLoc.filter((b) => b.status === "cancelled"), days,
+    revenue: sum(live, (b) => b.total), hours, cap, load: pct(hours, cap),
+    prepaid: sum(live.filter((b) => b.status === "paid"), (b) => b.prepay),
+    onCheck: sum(live.filter((b) => b.status === "prelim"), (b) => b.prepay),
+    disc: sum(live, (b) => Math.max(0, (b.fullTotal || b.total) - b.total)),
+  };
+}
+
+async function financeView() {
+  const [from, to] = finRange();
+  const len = Math.round((Date.parse(to) - Date.parse(from)) / 864e5) + 1;
+  const pFrom = addDays(from, -len), pTo = addDays(from, -1);
+  $("#app").innerHTML = '<p class="empty">Считаем…</p>';
+  let cur, prev;
+  try {
+    [cur, prev] = await Promise.all([
+      api("GET", "/admin/range", { query: { from, to } }),
+      api("GET", "/admin/range", { query: { from: pFrom, to: pTo } }).catch(() => ({ bookings: [] })),
+    ]);
+  } catch (e) { $("#app").innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
+  const S = finStats(cur.bookings, from, to), P = finStats(prev.bookings, pFrom, pTo);
+  const today = dayKey(Date.now());
+  const played = S.live.filter((b) => b.date < today), ahead = S.live.filter((b) => b.date >= today);
+  const avg = S.live.length ? S.revenue / S.live.length : 0, pAvg = P.live.length ? P.revenue / P.live.length : 0;
+  const d = (a, b) => { if (!b) return ""; const v = Math.round(((a - b) / b) * 100); return `<span class="delta ${v >= 0 ? "up" : "down"}">${v >= 0 ? "▲" : "▼"} ${Math.abs(v)}%</span>`; };
+  const fmtD = (x) => `${+x.slice(8)} ${MON[+x.slice(5, 7) - 1]}`;
+
+  // по дням
+  const byDay = {};
+  for (let i = 0; i < S.days; i++) byDay[addDays(from, i)] = 0;
+  S.live.forEach((b) => (byDay[b.date] += b.total));
+  const maxDay = Math.max(1, ...Object.values(byDay));
+  const step = S.days <= 14 ? 1 : S.days <= 31 ? 3 : 7;
+  const dayBars = Object.entries(byDay).map(([k, v], i) => `<div class="c ${v ? "" : "z"}" title="${fmtD(k)} — ${money(v)}"><em>${v ? Math.round(v / 1000) + "k" : ""}</em><i style="height:${Math.max(pct(v, maxDay), 3)}%"></i><span>${i % step === 0 ? +k.slice(8) : ""}</span></div>`).join("");
+  // по дням недели
+  const WDN = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"], wdRev = [0, 0, 0, 0, 0, 0, 0], wdCnt = [0, 0, 0, 0, 0, 0, 0];
+  for (let i = 0; i < S.days; i++) wdCnt[(weekday(addDays(from, i)) + 6) % 7]++;
+  S.live.forEach((b) => (wdRev[(weekday(b.date) + 6) % 7] += b.total));
+  const wdAvg = wdRev.map((v, i) => (wdCnt[i] ? v / wdCnt[i] : 0)), maxWd = Math.max(1, ...wdAvg);
+  const wdBars = wdAvg.map((v, i) => `<div class="c ${v ? "" : "z"}" title="${WDN[i]} — в среднем ${money(v)} в день"><em>${Math.round(v / 1000)}k</em><i style="height:${Math.max(pct(v, maxWd), 3)}%"></i><span>${WDN[i]}</span></div>`).join("");
+  // по часам
+  const hrCnt = {};
+  for (let h = cfg.open; h < cfg.close; h++) hrCnt[h] = 0;
+  S.live.forEach((b) => b.hours.forEach((h) => (hrCnt[h] = (hrCnt[h] || 0) + 1)));
+  const hrCap = S.days * S.fields.length || 1;
+  const hrBars = Object.entries(hrCnt).map(([h, n]) => `<div class="c ${n ? "" : "z"}" title="${hourLabel(+h)} — загрузка ${pct(n, hrCap)}%"><em>${pct(n, hrCap)}%</em><i style="height:${Math.max(pct(n, hrCap), 3)}%"></i><span>${+h % 24}</span></div>`).join("");
+  // разрезы
+  const hbars = (rows) => { const mx = Math.max(1, ...rows.map((r) => r.v)); return rows.map((r) => `<div class="hb"><div class="t"><b>${esc(r.name)}</b><span>${money(r.v)} · ${pct(r.v, S.revenue)}%${r.sub ? " · " + r.sub : ""}</span></div><div class="meter"><i style="width:${pct(r.v, mx)}%"></i></div></div>`).join("") || '<p class="muted">Нет данных</p>'; };
+  const byLoc = cfg.locations.map((l) => { const x = S.live.filter((b) => cfg.fields.find((f) => f.id === b.fieldId)?.locationId === l.id); return { name: l.name, v: sum(x, (b) => b.total), sub: `${sum(x, (b) => b.hours.length)} ч` }; }).filter((r) => fin.loc === "all" || r.v);
+  const byField = S.fields.map((f) => { const x = S.live.filter((b) => b.fieldId === f.id); const hh = sum(x, (b) => b.hours.length); return { name: `${locName(f.locationId)} · ${f.name}`, v: sum(x, (b) => b.total), sub: `загрузка ${pct(hh, S.days * (cfg.close - cfg.open))}%` }; });
+  const bySrc = [["site", "Сайт"], ["admin", "Вручную (админ)"]].map(([k, n]) => { const x = S.live.filter((b) => b.source === k); return { name: n, v: sum(x, (b) => b.total), sub: `${x.length} броней` }; });
+  // клиенты
+  const cl = {};
+  S.live.forEach((b) => { const k = b.phone || b.name; (cl[k] ||= { name: b.name, phone: b.phone, n: 0, h: 0, v: 0 }); cl[k].n++; cl[k].h += b.hours.length; cl[k].v += b.total; });
+  const clients_ = Object.values(cl).sort((a, b) => b.v - a.v);
+  const returning = clients_.filter((c) => c.n > 1).length;
+
+  $("#app").innerHTML = `
+    <div class="card" style="margin-top:16px;padding:14px 16px">
+      <div class="chips">
+        ${[["7", "7 дней"], ["30", "30 дней"], ["month", "Этот месяц"], ["prev", "Прошлый месяц"], ["custom", "Период"]].map(([k, n]) => `<button data-p="${k}" class="${fin.preset === k ? "on" : ""}">${n}</button>`).join("")}
+        ${fin.preset === "custom" ? `<input type="date" id="ff" value="${from}"> — <input type="date" id="ft" value="${to}">` : ""}
+      </div>
+      ${cfg.locations.length > 1 ? `<div class="chips" style="margin-top:10px">${[["all", "Все адреса"], ...cfg.locations.map((l) => [l.id, "📍 " + l.name])].map(([k, n]) => `<button data-l="${k}" class="${fin.loc === k ? "on" : ""}">${esc(n)}</button>`).join("")}</div>` : ""}
+      <p class="muted" style="font-size:12px;margin:10px 0 0">${fmtD(from)} — ${fmtD(to)} · ${S.days} дн. · сравнение с ${fmtD(pFrom)} — ${fmtD(pTo)}</p>
+    </div>
+    <div class="stats fin-stats">
+      <div class="stat"><div>Выручка</div><b>${money(S.revenue)}${d(S.revenue, P.revenue)}</b><small>сыграно ${money(sum(played, (b) => b.total))} · впереди ${money(sum(ahead, (b) => b.total))}</small></div>
+      <div class="stat"><div>Брони</div><b>${S.live.length}${d(S.live.length, P.live.length)}</b><small>${S.hours} ч продано</small></div>
+      <div class="stat"><div>Загрузка</div><b>${S.load}%${d(S.load, P.load)}</b><div class="meter"><i style="width:${S.load}%"></i></div><small>${S.hours} из ${S.cap} ч</small></div>
+      <div class="stat"><div>Средний чек</div><b>${money(avg)}${d(avg, pAvg)}</b><small>час в среднем ${money(S.hours ? S.revenue / S.hours : 0)}</small></div>
+      <div class="stat"><div>Предоплаты</div><b>${money(S.prepaid)}</b><small>${S.onCheck ? `+ ${money(S.onCheck)} на сверке · ` : ""}на месте ${money(S.revenue - S.prepaid - S.onCheck)}</small></div>
+      <div class="stat"><div>Скидки</div><b>${money(S.disc)}</b><small>${pct(S.disc, S.revenue + S.disc)}% от суммы по прайсу</small></div>
+      <div class="stat"><div>Отмены</div><b>${S.cancelled.length}</b><small>упущено ${money(sum(S.cancelled, (b) => b.total))}</small></div>
+      <div class="stat"><div>Клиенты</div><b>${clients_.length}</b><small>вернулись повторно ${returning} · ${pct(returning, clients_.length)}%</small></div>
+    </div>
+    <div class="card" style="padding:14px 16px"><h2>Выручка по дням</h2><div class="chart tall">${dayBars}</div></div>
+    <div class="fin-grid">
+      <div class="card"><h2>Средняя выручка по дням недели</h2><div class="chart tall">${wdBars}</div></div>
+      <div class="card"><h2>Загрузка по часам</h2><div class="chart tall">${hrBars}</div></div>
+      ${cfg.locations.length > 1 && fin.loc === "all" ? `<div class="card"><h2>По адресам</h2>${hbars(byLoc)}</div>` : ""}
+      <div class="card"><h2>По полям</h2>${hbars(byField)}</div>
+      <div class="card"><h2>Откуда брони</h2>${hbars(bySrc)}</div>
+      <div class="card"><h2>Топ клиентов</h2>${clients_.length ? `<table class="top"><tr><th>Клиент</th><th class="n">Брони</th><th class="n">Часы</th><th class="n">Сумма</th></tr>
+        ${clients_.slice(0, 10).map((c) => `<tr><td>${clientOf(c.phone)?.regular ? "★ " : ""}${esc(c.name)}<div class="muted" style="font-size:11px">${esc(c.phone || "")}</div></td><td class="n">${c.n}</td><td class="n">${c.h}</td><td class="n"><b>${money(c.v)}</b></td></tr>`).join("")}</table>` : '<p class="muted">Нет данных</p>'}</div>
+    </div>`;
+  $$("[data-p]").forEach((b) => b.onclick = () => { fin.preset = b.dataset.p; if (fin.preset === "custom") { fin.from = from; fin.to = to; } financeView(); });
+  $$("[data-l]").forEach((b) => b.onclick = () => { fin.loc = b.dataset.l; financeView(); });
+  const ff = $("#ff"), ft = $("#ft");
+  if (ff) ff.onchange = ft.onchange = () => { if (ff.value && ft.value) { fin.from = ff.value; fin.to = ft.value; financeView(); } };
 }
 
 // ---------- Скидки ----------
@@ -527,7 +700,7 @@ function settingsView() {
       <label class="f">Сколько минут держать слот на оплату<input name="holdMinutes" type="number" min="5" max="120" value="${c.holdMinutes}"></label></div>
       <label class="f">Ссылка Kaspi Pay / Kaspi QR (кнопка «Оплатить в Kaspi»)<input name="kaspiLink" value="${esc(c.kaspiLink)}" placeholder="https://pay.kaspi.kz/pay/…"></label>
       <div class="two"><label class="f">Номер для перевода<input name="kaspiPhone" value="${esc(c.kaspiPhone)}"></label>
-      <label class="f">Получатель, как пишется в чеке (напр. «Нурбек Ж.») — по нему проверяется чек<input name="kaspiName" value="${esc(c.kaspiName)}"></label></div>
+      <label class="f">Получатель (видит клиент при оплате)<input name="kaspiName" value="${esc(c.kaspiName)}"></label></div>
     </div>
     <button class="btn main block" style="margin-top:16px" id="ss">Сохранить настройки</button></form>`;
   $("#addf").onclick = () => {
@@ -552,7 +725,7 @@ function settingsView() {
     try {
       const r = await api("POST", "/admin/config", { body: { config: { ...c, ...fd, fields: c.fields } } });
       cfg = { ...cfg, ...r.config };
-      $("#title").textContent = cfg.name;
+      $("#title").innerHTML = esc(cfg.name).replace(/^(.*?)(\s+)(\S+)$/, "$1$2<em>$3</em>");
       toast("Настройки сохранены");
       settingsView();
     } catch (err) { toast(err.message, true); }

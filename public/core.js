@@ -103,7 +103,7 @@ const err = (status, error) => ({ status, body: { error } });
 const isDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || "");
 
 // store: { get(k), getE(k) -> {data, etag}, set(k, v, {onlyIfNew|onlyIfMatch}) -> {modified}, del(k), list(prefix) -> keys }
-export function createApi(store, { adminPassword, now = () => Date.now(), recognize = null } = {}) {
+export function createApi(store, { adminPassword, now = () => Date.now() } = {}) {
   const getConfig = async () => {
     const saved = (await store.get("config")) || {};
     const c = { ...DEFAULT_CONFIG, ...saved, fields: saved.fields || DEFAULT_CONFIG.fields, locations: saved.locations?.length ? saved.locations : DEFAULT_CONFIG.locations };
@@ -253,7 +253,6 @@ export function createApi(store, { adminPassword, now = () => Date.now(), recogn
       const b = await store.get(`bk/${q.date}/${q.id}`);
       if (!b) return err(404, "Бронь не найдена");
       const { phone, note, ...rest } = view(b);
-      if (rest.receipt) rest.receipt = { checks: rest.receipt.checks };
       return ok({ booking: rest });
     },
 
@@ -267,37 +266,9 @@ export function createApi(store, { adminPassword, now = () => Date.now(), recogn
       if (!body.b64 || body.b64.length > 5.6e6) return err(400, "Файл слишком большой (до 4 МБ)");
       await store.set(`file/${b.id}`, { type: body.type, b64: body.b64 });
 
-      const cfg = await getConfig();
-      let r = null;
-      try { r = recognize ? await recognize({ type: body.type, b64: body.b64 }, { booking: b, cfg }) : null; } catch { r = null; }
-      const checks = [];
-      const add = (okay, text) => checks.push({ ok: !!okay, text });
-      if (!r) add(false, "Не удалось распознать чек — попробуйте PDF из Kaspi или чёткий скриншот");
-      else {
-        add(r.is_kaspi && r.status_ok !== false, "Это успешный перевод/платёж Kaspi");
-        add(+r.amount >= b.prepay, `Сумма не меньше ${money(b.prepay)}` + (r.amount ? ` (в чеке ${money(r.amount)})` : ""));
-        if (cfg.kaspiName) {
-          const n = (x) => String(x || "").toLowerCase().replace(/[^a-zа-яёәғқңөұүһі0-9]/gi, "");
-          const a = n(r.recipient), e = n(cfg.kaspiName);
-          add(a && (a.includes(e) || e.includes(a)), `Получатель — ${cfg.kaspiName}` + (r.recipient ? ` (в чеке «${r.recipient}»)` : ""));
-        }
-        const ts = r.datetime ? Date.parse(String(r.datetime).trim().replace(" ", "T") + ":00Z") - TZ : NaN;
-        add(ts >= b.createdAt - 10 * 60e3 && ts <= now() + 10 * 60e3, "Оплата сделана после создания брони");
-        add(!!r.number, "Виден номер квитанции");
-      }
-      let next = { ...b, receipt: { ...(r || {}), checks, at: now() } };
-      if (checks.every((c) => c.ok)) {
-        const num = String(r.number).replace(/\s/g, "").toUpperCase();
-        const w = await store.set(`rcpt/${num}`, { id: b.id, date: b.date }, { onlyIfNew: true });
-        if (w?.modified === false) {
-          const used = await store.get(`rcpt/${num}`);
-          if (used?.id !== b.id) next.receipt.checks.push({ ok: false, text: "Этот чек уже использован для другой брони" });
-        }
-      }
-      if (next.receipt.checks.every((c) => c.ok)) {
-        next = { ...next, status: "prelim", exp: null, paidAt: now() };
-        if ((await lockSlots(next)) !== null) return err(409, "Время на оплату вышло, и слот уже заняли. Свяжитесь с администратором для возврата.");
-      }
+      // Чек не распознаём: бронь сразу подтверждается, админ сверяет оплату в Kaspi сам.
+      const next = { ...b, status: "prelim", exp: null, paidAt: now(), receipt: { type: body.type, at: now() } };
+      if ((await lockSlots(next)) !== null) return err(409, "Время на оплату вышло, и слот уже заняли. Свяжитесь с администратором для возврата.");
       await saveBooking(next);
       return ok({ booking: view(next) });
     },
@@ -321,6 +292,14 @@ export function createApi(store, { adminPassword, now = () => Date.now(), recogn
     "GET /admin/check": async () => ok({ ok: true }),
 
     "GET /admin/config": async () => ok(await getConfig()),
+
+    "GET /admin/range": async (q) => {
+      if (!isDate(q.from) || !isDate(q.to) || q.to < q.from) return err(400, "Неверный период");
+      const days = Math.round((Date.parse(q.to) - Date.parse(q.from)) / 864e5) + 1;
+      if (days > 93) return err(400, "Период не больше 3 месяцев");
+      const all = await Promise.all(Array.from({ length: days }, (_, i) => dayBookings(addDays(q.from, i))));
+      return ok({ bookings: all.flat() });
+    },
 
     "GET /admin/receipt": async (q) => {
       const f = await store.get(`file/${q.id}`);
@@ -378,10 +357,11 @@ export function createApi(store, { adminPassword, now = () => Date.now(), recogn
         const date = addDays(body.date, 7 * k);
         const auto = hours.reduce((s, h) => s + priceInfo(cfg, field, date, h).price, 0);
         const total = body.total ? Math.round(+body.total) : auto;
+        const fullTotal = hours.reduce((sm, h) => sm + priceFor(field, date, h), 0);
         const loc = cfg.locations.find((l) => l.id === field.locationId);
         const b = {
           id: rid(), date, fieldId: field.id, fieldName: field.name, locationId: loc?.id, locationName: loc?.name || "", hours, name, phone,
-          total, prepay: body.status === "paid" ? Math.round((total * (+cfg.prepayPercent || 0)) / 100) : 0,
+          total, fullTotal: Math.max(total, fullTotal), prepay: body.status === "paid" ? Math.round((total * (+cfg.prepayPercent || 0)) / 100) : 0,
           status: body.status === "paid" ? "paid" : "unpaid", exp: null, source: "admin",
           regular: !!body.regular || weeks > 1, series, note: String(body.note || "").slice(0, 300), createdAt: now(),
         };
